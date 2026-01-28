@@ -1,0 +1,10 @@
+{
+  "region": "",
+  "year": 0,
+  "country": "",
+  "operation": "average",
+  "dashboard": {
+    "show_region_chart": true,
+    "show_year_chart": true
+  }
+}
