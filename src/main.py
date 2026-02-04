@@ -1,2 +1,2 @@
 
-print("WE will start our project today")    
+print("WE will start our project today")
