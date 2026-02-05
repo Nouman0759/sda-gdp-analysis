@@ -59,4 +59,7 @@ def plot_year_gdp_line(filtered_data, config):
     plt.tight_layout()
     plt.show()
 
-
+    print("Test")
+    print("Test2")
+    print("Test3")
+    print("Test4")
