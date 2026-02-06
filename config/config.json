@@ -1,10 +1,6 @@
 {
-  "region": "",
-  "year": 0,
-  "country": "",
+  "region": "Asia",
+  "year": 2020,
   "operation": "average",
-  "dashboard": {
-    "show_region_chart": true,
-    "show_year_chart": true
-  }
+  "output": "dashboard"
 }
