@@ -14,6 +14,8 @@ def plot_region_gdp(filtered_data, config):
         print("No data available for region GDP plot.")
         return
 
+
+    contry_key = [k for k in filtered_data[0].keys() if "Country" in k and "Code" not in k][0]
     countries = list(map(lambda x: x["Country Name"], filtered_data))
     values = list(
         map(
@@ -42,6 +44,8 @@ def plot_year_gdp_line(filtered_data, config):
         print("No data available for year GDP line plot.")
         return
 
+    country_key = [k for k in filtered_data[0].keys() if "Country" in k and "Code" not in k][0]
+
     countries = list(map(lambda x: x["Country Name"], filtered_data))
     values = list(
         map(
@@ -59,7 +63,4 @@ def plot_year_gdp_line(filtered_data, config):
     plt.tight_layout()
     plt.show()
 
-    print("Test")
-    print("Test2")
-    print("Test3")
-    print("Test4")
+
