@@ -4,7 +4,6 @@ from data_processor import process_data
 from visualizer import (
     plot_region_gdp,
     plot_year_gdp_line,
-    plot_gdp_pie
 )
 
 def show_dashboard():
@@ -12,7 +11,7 @@ def show_dashboard():
         print("Starting dashboard...")
         
         # Load configuration - go up one directory level
-        with open("../config/config.json", "r") as file:
+        with open("config/config.json", "r") as file:
             config = json.load(file)
         
         print("Config loaded successfully!")
@@ -25,7 +24,7 @@ def show_dashboard():
         
         # Load GDP data - go up one directory level
         print("Loading GDP data...")
-        data = load_gdp_data("../data/gdp_with_continent_filled.csv")
+        data = load_gdp_data("data/gdp_with_continent_filled.csv")
         print(f"Loaded {len(data)} records")
         
         # Process data
@@ -41,7 +40,6 @@ def show_dashboard():
             print("Generating visualizations...")
             plot_region_gdp(filtered_data, config)
             plot_year_gdp_line(filtered_data, config)
-            plot_gdp_pie(filtered_data, config)
             
     except FileNotFoundError as e:
         print(f"File not found: {e}")
