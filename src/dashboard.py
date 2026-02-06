@@ -1,41 +1,53 @@
-import json 
+import json
 from data_loader import load_gdp_data
-from data_processor import cleandata,filterdata,statistics
-from visualizer import region,year
+from data_processor import process_data
+from visualizer import (
+    plot_region_gdp,
+    plot_year_gdp_line,
+    plot_gdp_pie
+)
 
-def dashboard():
+def show_dashboard():
     try:
-        # Load Configuration
-        with open("config/config.json","r") as file:
-            config=json.load(file)
+        print("Starting dashboard...")
+        
+        # Load configuration - go up one directory level
+        with open("../config/config.json", "r") as file:
+            config = json.load(file)
+        
+        print("Config loaded successfully!")
         print("GDP ANALYTICS DASHBOARD")
-        print("________________________")
+        print("=======================")
         print(f"Region    : {config.get('region')}")
         print(f"Year      : {config.get('year')}")
         print(f"Operation : {config.get('operation')}")
         print()
-        # Load and Process Data
-        rawdata=load_gdp_data("data/gdp_data.csv")
-        cleaned=cleandata(rawdata)
-
-        filtered=filterdata (
-            cleaned,
-            region=config.get("region"),
-            year=config.get("year"),
-            country=config.get("country")
-        )
-        # Compute result
-        result = statistics(filtered, config.get("operation"))
-
+        
+        # Load GDP data - go up one directory level
+        print("Loading GDP data...")
+        data = load_gdp_data("../data/gdp_with_continent_filled.csv")
+        print(f"Loaded {len(data)} records")
+        
+        # Process data
+        print("Processing data...")
+        result, filtered_data = process_data(data, config)
+        
         print(f"Computed Result: {result}")
-
-        # Visualization (controlled by config)
+        print(f"Filtered records: {len(filtered_data)}")
+        print()
+        
+        # Visualization
         if config.get("output") == "dashboard":
-            region(filtered)   
-            year(filtered)
-
-    except FileNotFoundError:
-        print("Required file not found. Please check data or config files.")
+            print("Generating visualizations...")
+            plot_region_gdp(filtered_data, config)
+            plot_year_gdp_line(filtered_data, config)
+            plot_gdp_pie(filtered_data, config)
+            
+    except FileNotFoundError as e:
+        print(f"File not found: {e}")
+    except ValueError as e:
+        print(f"Configuration Error: {e}")
     except Exception as e:
-        print(f"Error: {e}")
-
+        print(f"Unexpected Error: {e}")
+        import traceback
+        traceback.print_exc()
