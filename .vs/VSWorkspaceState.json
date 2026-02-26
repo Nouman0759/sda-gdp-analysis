@@ -1,6 +1,8 @@
 {
   "ExpandedNodes": [
     "",
+    "\\config",
+    "\\data",
     "\\src"
   ],
   "SelectedNode": "\\src\\dashboard.py",
