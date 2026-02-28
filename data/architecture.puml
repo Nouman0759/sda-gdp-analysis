@@ -1,0 +1,75 @@
+@startuml Architecture
+' ============================================
+' Clean PlantUML for GDP Analysis Modular Architecture
+' ============================================
+
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam ArrowFontSize 10
+skinparam defaultFontSize 11
+
+' -------------------------
+' Core Module
+' -------------------------
+package "Core Module" {
+    interface DataSink
+    interface PipelineService
+
+    class TransformationEngine {
+        +config: dict
+        +execute(raw_data: List<Dict>)
+    }
+
+    TransformationEngine ..|> PipelineService
+}
+
+' -------------------------
+' Input Module
+' -------------------------
+package "Input Module" {
+    class CsvReader {
+        +run()
+    }
+    class JsonReader {
+        +run()
+    }
+
+    CsvReader --> PipelineService : send raw data
+    JsonReader --> PipelineService : send raw data
+}
+
+' -------------------------
+' Output Module
+' -------------------------
+package "Output Module" {
+    class ConsoleWriter {
+        +write(results: Any)
+    }
+    class DashboardWriter {
+        +write(results: Dict)
+        +start()
+    }
+
+    TransformationEngine --> DataSink : write results
+    ConsoleWriter ..|> DataSink
+    DashboardWriter ..|> DataSink
+}
+
+' -------------------------
+' Main Module
+' -------------------------
+package "Main Module" {
+    class main
+}
+
+' -------------------------
+' Dependencies from Main
+' -------------------------
+main --> TransformationEngine : inject sink
+main --> CsvReader : inject engine
+main --> JsonReader : inject engine
+main --> ConsoleWriter : select sink
+main --> DashboardWriter : select sink
+
+@enduml
