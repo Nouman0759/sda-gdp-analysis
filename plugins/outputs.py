@@ -263,12 +263,72 @@ class DashboardWriter:
 
 class ConsoleWriter:
     def write(self, results: Any) -> None:
-        print("\n===== ANALYSIS RESULTS =====")
-        if isinstance(results, dict):
-            for key, value in results.items():
-                print(f"\n--- {key.upper()} ({len(value)} items) ---")
-                for item in value[:5]:  # show first few
-                    print(item)
-        else:
+        print("\n" + "=" * 70)
+        print(" " * 22 + "GDP ANALYSIS RESULTS")
+        print("=" * 70)
+
+        if not isinstance(results, dict):
             print(results)
-        print("===========================\n")
+            print("=" * 70 + "\n")
+            return
+
+        for key, value in results.items():
+            print("\n" + "-" * 70)
+            print(f"{key.replace('_', ' ').upper()}  |  Total Items: {len(value)}")
+            print("-" * 70)
+
+            if not value:
+                print("No data available.\n")
+                continue
+
+            # Format based on result type
+            for item in value[:5]:  # Show only first 5 for readability
+
+                if key in ("top_10", "bottom_10"):
+                    print(
+                        f"{item['Country']:<30} "
+                        f"GDP: ${item['GDP']:,.0f}  "
+                        f"Year: {item['Year']}"
+                    )
+
+                elif key == "global_trend":
+                    print(
+                        f"Year {item['Year']:<6} "
+                        f"Total GDP: ${item['Total GDP']:,.0f}"
+                    )
+
+                elif key == "average_continent":
+                    print(
+                        f"{item['Continent']:<20} "
+                        f"Average GDP: ${item['Average GDP']:,.0f}"
+                    )
+
+                elif key == "growth_rates":
+                    print(
+                        f"{item['Country']:<25} "
+                        f"Avg Growth: {item['Average Growth']:.2f}%"
+                    )
+
+                elif key == "fastest_continent":
+                    print(
+                        f"{item['Continent']:<20} "
+                        f"Avg Annual Growth: {item['Avg Annual Growth %']:.2f}%"
+                    )
+
+                elif key == "consistent_decline":
+                    print(
+                        f"{item['Country']:<25} "
+                        f"Avg Decline: {item['Avg Decline %']:.2f}% "
+                        f"(Last {item['Years']} Years)"
+                    )
+
+                elif key == "continent_contribution":
+                    year = item["Year"]
+                    print(f"Year {year}:")
+                    for cont, percent in item["Contributions"].items():
+                        print(f"   {cont:<20} {percent:.2f}%")
+
+                else:
+                    print(item)
+
+        print("\n" + "=" * 70 + "\n")
