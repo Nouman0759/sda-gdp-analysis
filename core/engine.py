@@ -163,10 +163,17 @@ class TransformationEngine(PipelineService):
     # 7. Consistent Decline
     # ────────────────────────────────────────────────
     def _consistent_decline(self, data: List[Dict], continent: str, num_years: int, end_year: int) -> List[Dict]:
+        if data and data[0]:
+            print("Sample row keys:", list(data[0].keys()))  # debug: see real columns
+
         def has_decline(row: Dict) -> Dict | None:
             if not self._is_real_country(row) or row.get("Continent") != continent:
                 return None
-            name = row.get("Country Name", "")
+
+            # Dynamic country key
+            country_key = next((k for k in row.keys() if "country" in k.lower() and "code" not in k.lower()), None)
+            name = row.get(country_key, "Unknown") if country_key else "Unknown"
+
             years = [str(y) for y in range(end_year - num_years + 1, end_year + 1)]
             gdps = [self._get_gdp_value(row, y) for y in years]
             if None in gdps or len(gdps) < 2:
@@ -178,6 +185,14 @@ class TransformationEngine(PipelineService):
                 avg_decline = sum(growths) / len(growths) * 100
                 return {"Country": name, "Years": num_years, "Avg Decline %": avg_decline}
             return None
+
+        decliners = list(filter(None, map(has_decline, data)))
+
+        print("Consistent Decline countries found:", len(decliners))
+        if decliners:
+            print("First few:", [d["Country"] for d in decliners[:3]])
+
+        return sorted(decliners, key=lambda x: x["Avg Decline %"])[:10]
 
         # Convert filter to list immediately
         decliners = list(filter(None, map(has_decline, data)))
