@@ -180,48 +180,54 @@ class DashboardWriter:
         ax = fig.add_subplot(111)
 
         if not data:
-            ax.text(0.5, 0.5, "No countries showed consistent decline", 
+            ax.text(0.5, 0.5, "No countries showed consistent decline in the selected period",
                     ha="center", va="center", fontsize=14, color="gray")
             ax.axis("off")
         else:
-            # Shorten country names for better spacing
-            countries = [d["Country"][:20] + "..." if len(d["Country"]) > 20 else d["Country"] for d in data]
+            # Shorten long country names to prevent overlap
+            countries = [d["Country"][:22] + "..." if len(d["Country"]) > 22 else d["Country"] for d in data]
             declines = [d["Avg Decline %"] for d in data]
 
-            # Horizontal bars for negative values (go left from 0)
-            bars = ax.barh(countries, declines, color="indianred", edgecolor="black", height=0.7)
+            # Create vertical bars (negative values go downward)
+            bars = ax.bar(countries, declines, color="indianred", edgecolor="black", width=0.65)
 
-            # Zero line for reference
-            ax.axvline(0, color="black", linewidth=1, linestyle="--")
+            # Add zero line for reference
+            ax.axhline(0, color="black", linewidth=1, linestyle="--")
 
-            # Set x-limits with padding
-            min_decline = min(declines) - 3   # extra space on left
-            ax.set_xlim(min_decline, 2)       # small right padding
+            # Set y-limits with padding for visibility
+            min_val = min(declines) - 3 if declines else -5
+            ax.set_ylim(min_val, 2)
 
-            ax.set_xlabel("Avg Annual Decline %")
+            ax.set_ylabel("Avg Annual Decline %")
             ax.set_title(f"Countries with Consistent Decline (Last {data[0]['Years']} Years)")
 
-            # Add value labels inside or beside bars
+            # Rotate and align country names
+            ax.set_xticks(range(len(countries)))
+            ax.set_xticklabels(countries, rotation=45, ha="right", fontsize=9, va="top")
+
+            # Add value labels above/below bars
             for bar, val in zip(bars, declines):
                 if val < 0:
-                    # Inside bar for negative
-                    ax.text(val / 2, bar.get_y() + bar.get_height()/2,
-                            f"{val:.1f}%", ha="center", va="center", color="white", fontsize=10, fontweight="bold")
+                    # Label below the bar (inside or just under)
+                    ax.text(bar.get_x() + bar.get_width()/2, val - 0.8,
+                            f"{val:.1f}%", ha="center", va="top", color="black", fontsize=10, fontweight="bold")
                 else:
-                    # Outside for positive (rare)
-                    ax.text(val + 0.5, bar.get_y() + bar.get_height()/2,
-                            f"{val:.1f}%", ha="left", va="center", color="black", fontsize=10)
+                    # Label above the bar
+                    ax.text(bar.get_x() + bar.get_width()/2, val + 0.5,
+                            f"{val:.1f}%", ha="center", va="bottom", color="black", fontsize=10)
 
-            # Invert y-axis so biggest decline (most negative) at top
-            ax.invert_yaxis()
+            # Add grid only on y-axis
+            ax.grid(True, axis="y", alpha=0.3, linestyle="--")
 
-            ax.grid(True, axis="x", alpha=0.3, linestyle="--")
+            # Optional: Make y-axis show more ticks for readability
+            ax.set_yticks(range(int(min_val), 3, 5))
 
-        fig.tight_layout(pad=2.0)
+        fig.tight_layout(pad=2.5)
         canvas = FigureCanvasTkAgg(fig, master=frame)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
         self.canvases["consistent_decline"] = canvas
+        print("Decline tab data:", [(country, val) for country, val in zip(countries, declines)])
 
     # ────────────────────────────────────────────────
     # 8. Continent Contribution Tab (Stacked Area)
