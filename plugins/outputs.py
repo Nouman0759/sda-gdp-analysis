@@ -1,340 +1,244 @@
-from typing import Dict, List, Any
-import tkinter as tk
-from tkinter import ttk
+"""
+outputs.py - Real-Time Dashboard
+"""
+
+import threading
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from collections import deque
+
+from core.contracts import IOutputModule, ITelemetryObserver, ProcessedPacket
 
 
-class DashboardWriter:
-    def __init__(self):
-        self.root = tk.Tk()
-        self.root.title("GDP Analysis Dashboard")
-        self.root.geometry("1300x850")
-
-        self.notebook = ttk.Notebook(self.root)
-        self.notebook.pack(fill="both", expand=True, padx=10, pady=10)
-
-        self.canvases = {}
-
-    def write(self, results: Dict[str, List[Dict]]) -> None:
-        for tab in self.notebook.tabs():
-            self.notebook.forget(tab)
-
-        # 1. Top 10
-        if "top_10" in results and results["top_10"]:
-            self._create_bar_tab("top_10", results["top_10"], "Top 10 Countries by GDP", "skyblue")
-
-        # 2. Bottom 10
-        if "bottom_10" in results and results["bottom_10"]:
-            self._create_bar_tab("bottom_10", results["bottom_10"], "Bottom 10 Countries by GDP", "lightcoral")
-
-        # 3. Global Trend
-        if "global_trend" in results and results["global_trend"]:
-            frame = ttk.Frame(self.notebook)
-            self.notebook.add(frame, text="Global GDP Trend")
-            fig = plt.Figure(figsize=(10, 6))
-            ax = fig.add_subplot(111)
-            years = [r["Year"] for r in results["global_trend"]]
-            totals = [r["Total GDP"] / 1e12 for r in results["global_trend"]]
-            ax.plot(years, totals, marker="o", color="teal")
-            ax.set_xlabel("Year")
-            ax.set_ylabel("Total GDP (Trillion USD)")
-            ax.set_title("Global GDP Trend")
-            ax.grid(True, alpha=0.3)
-            ax.tick_params(axis="x", rotation=30)
-            fig.tight_layout()
-            canvas = FigureCanvasTkAgg(fig, master=frame)
-            canvas.draw()
-            canvas.get_tk_widget().pack(fill="both", expand=True)
-            self.canvases["global_trend"] = canvas
-
-        # 4. Average by Continent
-        if "average_continent" in results and results["average_continent"]:
-            frame = ttk.Frame(self.notebook)
-            self.notebook.add(frame, text="Avg GDP by Continent")
-            fig = plt.Figure(figsize=(10, 6))
-            ax = fig.add_subplot(111)
-            continents = [r["Continent"] for r in results["average_continent"]]
-            avgs = [r["Average GDP"] / 1e12 for r in results["average_continent"]]
-            ax.pie(avgs, labels=continents, autopct="%1.1f%%", startangle=90, textprops={'fontsize': 9})
-            ax.set_title("Average GDP Share by Continent")
-            fig.tight_layout()
-            canvas = FigureCanvasTkAgg(fig, master=frame)
-            canvas.draw()
-            canvas.get_tk_widget().pack(fill="both", expand=True)
-            self.canvases["average_continent"] = canvas
-
-        # 5. Growth Rates
-        if "growth_rates" in results and results["growth_rates"]:
-            self._create_growth_tab(results["growth_rates"])
-
-        # 6. Fastest Growing Continent
-        if "fastest_continent" in results and results["fastest_continent"]:
-            self._create_fastest_cont_tab(results["fastest_continent"])
-
-        # 7. Consistent Decline
-        if "consistent_decline" in results and results["consistent_decline"]:
-            self._create_decline_tab(results["consistent_decline"])
-
-        # 8. Continent Contribution
-        if "continent_contribution" in results and results["continent_contribution"]:
-            self._create_contrib_tab(results["continent_contribution"])
-
-    def _create_bar_tab(self, key: str, data: List[Dict], title: str, color: str):
-        frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text=title.split(" ")[0] + " 10")
-
-        fig = plt.Figure(figsize=(12, 7))
-        ax = fig.add_subplot(111)
-
-        countries = [r["Country"] for r in data]
-        gdps = [r["GDP"] / 1e12 for r in data]
-
-        bars = ax.bar(countries, gdps, color=color, edgecolor="black")
-
-        ax.set_ylabel("GDP (Trillion USD)")
-        ax.set_title(title)
-
-        # Improved labels
-        short_labels = [c[:35] + "..." if len(c) > 35 else c for c in countries]
-        ax.set_xticks(range(len(countries)))
-        ax.set_xticklabels(short_labels, rotation=45, ha="right", fontsize=9)
-
-        # Value labels on bars
-        for bar in bars:
-            h = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2, h + 0.1, f"{h:.2f}", ha="center", va="bottom", fontsize=8)
-
-        ax.grid(True, axis="y", alpha=0.3)
-        fig.tight_layout(pad=3.0)
-
-        canvas = FigureCanvasTkAgg(fig, master=frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill="both", expand=True)
-        self.canvases[key] = canvas
-        # ────────────────────────────────────────────────
-    # 3. Growth Rates Tab
-    # ────────────────────────────────────────────────
-    def _create_growth_tab(self, data: List[Dict]):
-        if not data:
-            return
-        frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text="Growth Rates")
-
-        fig = plt.Figure(figsize=(11, 6))
-        ax = fig.add_subplot(111)
-
-        for entry in data:
-            country = entry["Country"]
-            growths = entry["Growths"]
-            years = [g["Year"] for g in growths]
-            percents = [g["Growth %"] for g in growths]
-            ax.plot(years, percents, marker="o", label=country)
-
-        ax.set_xlabel("Year")
-        ax.set_ylabel("Growth Rate (%)")
-        ax.set_title("GDP Growth Rate - Top Countries")
-        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
-        ax.grid(True, alpha=0.3)
-        fig.tight_layout()
-
-        canvas = FigureCanvasTkAgg(fig, master=frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill="both", expand=True)
-        self.canvases["growth_rates"] = canvas
-
-    # ────────────────────────────────────────────────
-    # 6. Fastest Growing Continent Tab
-    # ────────────────────────────────────────────────
-    def _create_fastest_cont_tab(self, data: List[Dict]):
-        if not data:
-            return
-        frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text="Fastest Continent")
-
-        fig = plt.Figure(figsize=(10, 6))
-        ax = fig.add_subplot(111)
-        conts = [d["Continent"] for d in data[:5]]
-        growths = [d["Avg Annual Growth %"] for d in data[:5]]
-        bars = ax.barh(conts, growths, color="seagreen")
-        ax.set_xlabel("Avg Annual Growth %")
-        ax.set_title("Fastest Growing Continents")
-        for bar in bars:
-            w = bar.get_width()
-            ax.text(w + 0.5, bar.get_y() + bar.get_height()/2, f"{w:.2f}%", va="center")
-        fig.tight_layout()
-
-        canvas = FigureCanvasTkAgg(fig, master=frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill="both", expand=True)
-        self.canvases["fastest_continent"] = canvas
-
-    # ────────────────────────────────────────────────
-    # 7. Consistent Decline Tab
-    # ────────────────────────────────────────────────
-    def _create_decline_tab(self, data: List[Dict]):
-        frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text="Consistent Decline")
-
-        fig = plt.Figure(figsize=(12, 7))
-        ax = fig.add_subplot(111)
-
-        if not data:
-            ax.text(0.5, 0.5, "No countries showed consistent decline in the selected period",
-                    ha="center", va="center", fontsize=14, color="gray")
-            ax.axis("off")
-        else:
-            # Shorten long country names to prevent overlap
-            countries = [d["Country"][:22] + "..." if len(d["Country"]) > 22 else d["Country"] for d in data]
-            declines = [d["Avg Decline %"] for d in data]
-
-            # Create vertical bars (negative values go downward)
-            bars = ax.bar(countries, declines, color="indianred", edgecolor="black", width=0.65)
-
-            # Add zero line for reference
-            ax.axhline(0, color="black", linewidth=1, linestyle="--")
-
-            # Set y-limits with padding for visibility
-            min_val = min(declines) - 3 if declines else -5
-            ax.set_ylim(min_val, 2)
-
-            ax.set_ylabel("Avg Annual Decline %")
-            ax.set_title(f"Countries with Consistent Decline (Last {data[0]['Years']} Years)")
-
-            # Rotate and align country names
-            ax.set_xticks(range(len(countries)))
-            ax.set_xticklabels(countries, rotation=45, ha="right", fontsize=9, va="top")
-
-            # Add value labels above/below bars
-            for bar, val in zip(bars, declines):
-                if val < 0:
-                    # Label below the bar (inside or just under)
-                    ax.text(bar.get_x() + bar.get_width()/2, val - 0.8,
-                            f"{val:.1f}%", ha="center", va="top", color="black", fontsize=10, fontweight="bold")
-                else:
-                    # Label above the bar
-                    ax.text(bar.get_x() + bar.get_width()/2, val + 0.5,
-                            f"{val:.1f}%", ha="center", va="bottom", color="black", fontsize=10)
-
-            # Add grid only on y-axis
-            ax.grid(True, axis="y", alpha=0.3, linestyle="--")
-
-            # Optional: Make y-axis show more ticks for readability
-            ax.set_yticks(range(int(min_val), 3, 5))
-
-        fig.tight_layout(pad=2.5)
-        canvas = FigureCanvasTkAgg(fig, master=frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill="both", expand=True)
-        self.canvases["consistent_decline"] = canvas
-        print("Decline tab data:", [(country, val) for country, val in zip(countries, declines)])
-
-    # ────────────────────────────────────────────────
-    # 8. Continent Contribution Tab (Stacked Area)
-    # ────────────────────────────────────────────────
-    def _create_contrib_tab(self, data: List[Dict]):
-        if not data:
-            return
-        frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text="Continent Contribution")
-
-        fig = plt.Figure(figsize=(11, 6))
-        ax = fig.add_subplot(111)
-
-        years = [d["Year"] for d in data]
-        conts = sorted(set(c for d in data for c in d["Contributions"]))
-        contrib_matrix = []
-        for y_data in data:
-            row = [y_data["Contributions"].get(c, 0) for c in conts]
-            contrib_matrix.append(row)
-
-        # Fix: convert zipped iterator to explicit list of lists
-        stacks = [list(col) for col in zip(*contrib_matrix)]
-
-        ax.stackplot(years, stacks, labels=conts)
-        ax.set_xlabel("Year")
-        ax.set_ylabel("Contribution (%)")
-        ax.set_title("Continent Contribution to Global GDP")
-        ax.legend(loc='upper left', bbox_to_anchor=(1, 1), fontsize=8)
-        ax.grid(True, alpha=0.2)
-        fig.tight_layout()
-
-        canvas = FigureCanvasTkAgg(fig, master=frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill="both", expand=True)
-        self.canvases["continent_contribution"] = canvas
-    def start(self):
-        self.root.mainloop()
+def _queue_color(size, max_size):
+    if max_size == 0:
+        return "green"
+    ratio = size / max_size
+    if ratio < 0.4:
+        return "green"
+    elif ratio < 0.75:
+        return "orange"
+    else:
+        return "red"
 
 
-class ConsoleWriter:
-    def write(self, results: Any) -> None:
-        print("\n" + "=" * 70)
-        print(" " * 22 + "GDP ANALYSIS RESULTS")
-        print("=" * 70)
+def _queue_label(size, max_size):
+    if max_size == 0:
+        return "Unknown"
+    ratio = size / max_size
+    if ratio < 0.4:
+        return "Flowing"
+    elif ratio < 0.75:
+        return "Filling"
+    else:
+        return "Backpressure"
 
-        if not isinstance(results, dict):
-            print(results)
-            print("=" * 70 + "\n")
-            return
 
-        for key, value in results.items():
-            print("\n" + "-" * 70)
-            print(f"{key.replace('_', ' ').upper()}  |  Total Items: {len(value)}")
-            print("-" * 70)
+class Dashboard(IOutputModule, ITelemetryObserver):
 
-            if not value:
-                print("No data available.\n")
+    def __init__(self, config):
+        viz = config.get("visualizations", {})
+        self._telemetry_cfg = viz.get("telemetry", {})
+        self._chart_cfgs = viz.get("data_charts", [])
+        self._max_points = 200
+
+        self._x_values = deque(maxlen=self._max_points)
+        self._y_metric = deque(maxlen=self._max_points)
+        self._y_average = deque(maxlen=self._max_points)
+
+        self._snapshot = {}
+        self._snap_lock = threading.Lock()
+        self._pipeline_done = False
+
+        self._line_cfg = {}
+        self._avg_cfg = {}
+        for c in self._chart_cfgs:
+            if c["type"] == "real_time_line_graph_values":
+                self._line_cfg = c
+            elif c["type"] == "real_time_line_graph_average":
+                self._avg_cfg = c
+
+    def on_telemetry_update(self, snapshot):
+        with self._snap_lock:
+            self._snapshot = snapshot
+
+    def _consume(self, processed_queue, stop_event):
+        while True:
+            try:
+                item = processed_queue.get(timeout=1.0)
+            except Exception:
+                # Keep trying even if stop_event is set
+                # until we get the None sentinel
+                if self._pipeline_done:
+                    break
                 continue
 
-            # Format based on result type
-            for item in value[:5]:  # Show only first 5 for readability
+            if item is None:
+                self._pipeline_done = True
+                print("[Dashboard] All packets received. Window stays open until you close it.")
+                break
 
-                if key in ("top_10", "bottom_10"):
-                    print(
-                        f"{item['Country']:<30} "
-                        f"GDP: ${item['GDP']:,.0f}  "
-                        f"Year: {item['Year']}"
-                    )
+            packet = item
+            self._x_values.append(packet.time_period)
+            self._y_metric.append(packet.metric_value)
+            if packet.computed_metric is not None:
+                self._y_average.append(packet.computed_metric)
 
-                elif key == "global_trend":
-                    print(
-                        f"Year {item['Year']:<6} "
-                        f"Total GDP: ${item['Total GDP']:,.0f}"
-                    )
+    def run(self, processed_queue, telemetry, stop_event):
+        telemetry.subscribe(self)
 
-                elif key == "average_continent":
-                    print(
-                        f"{item['Continent']:<20} "
-                        f"Average GDP: ${item['Average GDP']:,.0f}"
-                    )
+        consumer_thread = threading.Thread(
+            target=self._consume,
+            args=(processed_queue, stop_event),
+            daemon=True,
+        )
+        consumer_thread.start()
 
-                elif key == "growth_rates":
-                    print(
-                        f"{item['Country']:<25} "
-                        f"Avg Growth: {item['Average Growth']:.2f}%"
-                    )
+        show_raw = self._telemetry_cfg.get("show_raw_stream", True)
+        show_proc = self._telemetry_cfg.get("show_processed_stream", True)
+        n_telem = sum([show_raw, show_proc])
+        n_charts = len(self._chart_cfgs)
+        total_rows = n_telem + n_charts
 
-                elif key == "fastest_continent":
-                    print(
-                        f"{item['Continent']:<20} "
-                        f"Avg Annual Growth: {item['Avg Annual Growth %']:.2f}%"
-                    )
+        plt.ion()
+        fig, axes_list = plt.subplots(total_rows, 1, figsize=(13, 3 * total_rows))
+        fig.patch.set_facecolor("#1e1e2e")
+        fig.suptitle("Pipeline Real-Time Dashboard", color="white",
+                     fontsize=14, fontweight="bold")
 
-                elif key == "consistent_decline":
-                    print(
-                        f"{item['Country']:<25} "
-                        f"Avg Decline: {item['Avg Decline %']:.2f}% "
-                        f"(Last {item['Years']} Years)"
-                    )
+        if total_rows == 1:
+            axes_list = [axes_list]
 
-                elif key == "continent_contribution":
-                    year = item["Year"]
-                    print(f"Year {year}:")
-                    for cont, percent in item["Contributions"].items():
-                        print(f"   {cont:<20} {percent:.2f}%")
+        for ax in axes_list:
+            ax.set_facecolor("#2a2a3e")
+            ax.tick_params(colors="white")
+            for spine in ax.spines.values():
+                spine.set_edgecolor("#555577")
 
-                else:
-                    print(item)
+        telem_axes = {}
+        chart_axes = []
+        row = 0
 
-        print("\n" + "=" * 70 + "\n")
+        if show_raw:
+            telem_axes["raw"] = axes_list[row]
+            row += 1
+        if show_proc:
+            telem_axes["proc"] = axes_list[row]
+            row += 1
+        for i in range(n_charts):
+            chart_axes.append(axes_list[row + i])
+
+        plt.tight_layout(rect=[0, 0, 1, 0.96])
+        plt.show(block=False)
+
+        print("[Dashboard] Window opened. Close it with the X button when done.")
+
+        # Keep looping forever until user closes the window
+        while plt.fignum_exists(fig.number):
+
+            with self._snap_lock:
+                snap = dict(self._snapshot)
+
+            # Raw queue bar
+            if "raw" in telem_axes:
+                ax = telem_axes["raw"]
+                ax.cla()
+                ax.set_facecolor("#2a2a3e")
+                rqs = snap.get("raw_queue_size", 0)
+                rqm = snap.get("raw_queue_max", 1) or 1
+                color = _queue_color(rqs, rqm)
+                label = _queue_label(rqs, rqm)
+                ax.barh(0, rqs, color=color, height=0.4)
+                ax.set_xlim(0, rqm)
+                ax.set_yticks([])
+                ax.set_xlabel("Queue depth", color="white", fontsize=8)
+                ax.set_title(
+                    "Raw Stream Queue  [{}/{}]  - {}".format(rqs, rqm, label),
+                    color=color, fontsize=9, fontweight="bold"
+                )
+                ax.tick_params(colors="white")
+                ax.set_facecolor("#2a2a3e")
+
+            # Processed queue bar
+            if "proc" in telem_axes:
+                ax = telem_axes["proc"]
+                ax.cla()
+                ax.set_facecolor("#2a2a3e")
+                pqs = snap.get("processed_queue_size", 0)
+                pqm = snap.get("processed_queue_max", 1) or 1
+                color = _queue_color(pqs, pqm)
+                label = _queue_label(pqs, pqm)
+                ax.barh(0, pqs, color=color, height=0.4)
+                ax.set_xlim(0, pqm)
+                ax.set_yticks([])
+                ax.set_xlabel("Queue depth", color="white", fontsize=8)
+                ax.set_title(
+                    "Processed Stream Queue  [{}/{}]  - {}".format(pqs, pqm, label),
+                    color=color, fontsize=9, fontweight="bold"
+                )
+                ax.tick_params(colors="white")
+                ax.set_facecolor("#2a2a3e")
+                v = snap.get("packets_verified", 0)
+                d = snap.get("packets_dropped", 0)
+                a = snap.get("packets_averaged", 0)
+                ax.text(
+                    0.99, 0.95,
+                    "Verified: {}   Dropped: {}   Averaged: {}".format(v, d, a),
+                    transform=ax.transAxes, color="white",
+                    fontsize=7.5, ha="right", va="top"
+                )
+
+            # Live sensor values line chart
+            if len(chart_axes) > 0 and self._line_cfg:
+                ax = chart_axes[0]
+                ax.cla()
+                ax.set_facecolor("#2a2a3e")
+                xs = list(self._x_values)
+                ys = list(self._y_metric)
+                if xs and ys:
+                    ax.plot(xs, ys, color="#00d4ff", linewidth=1.5,
+                            marker="o", markersize=3, label="Sensor Value")
+                ax.set_title(self._line_cfg.get("title", "Live Sensor Values"),
+                             color="white", fontsize=10)
+                ax.set_xlabel(self._line_cfg.get("x_axis", "time_period"),
+                              color="white", fontsize=8)
+                ax.set_ylabel(self._line_cfg.get("y_axis", "metric_value"),
+                              color="white", fontsize=8)
+                ax.tick_params(colors="white")
+                ax.set_facecolor("#2a2a3e")
+                ax.grid(True, color="#444466", linewidth=0.5, linestyle="--")
+                if xs and ys:
+                    ax.legend(facecolor="#1e1e2e", labelcolor="white", fontsize=8)
+
+            # Running average line chart
+            if len(chart_axes) > 1 and self._avg_cfg:
+                ax = chart_axes[1]
+                ax.cla()
+                ax.set_facecolor("#2a2a3e")
+                xs = list(self._x_values)
+                ya = list(self._y_average)
+                if xs and ya:
+                    ax.plot(xs[-len(ya):], ya, color="#ff9f43", linewidth=2.0,
+                            marker="o", markersize=3, label="Running Average")
+                ax.set_title(self._avg_cfg.get("title", "Running Average"),
+                             color="white", fontsize=10)
+                ax.set_xlabel(self._avg_cfg.get("x_axis", "time_period"),
+                              color="white", fontsize=8)
+                ax.set_ylabel(self._avg_cfg.get("y_axis", "computed_metric"),
+                              color="white", fontsize=8)
+                ax.tick_params(colors="white")
+                ax.set_facecolor("#2a2a3e")
+                ax.grid(True, color="#444466", linewidth=0.5, linestyle="--")
+                if xs and ya:
+                    ax.legend(facecolor="#1e1e2e", labelcolor="white", fontsize=8)
+
+            try:
+                plt.tight_layout(rect=[0, 0, 1, 0.96])
+                fig.canvas.draw()
+                fig.canvas.flush_events()
+                plt.pause(0.5)
+            except Exception:
+                break
+
+        print("[Dashboard] Window closed by user.")
+        stop_event.set()
+        consumer_thread.join(timeout=2)
