@@ -1,173 +1,85 @@
-# SDA Project – Phase 1
 
-## Functional & Data-Driven GDP Analysis
-
----
-
-## Project Description
-
-This project implements a **GDP analysis system** using **Python functional programming principles**.
-It analyzes **World Bank GDP data** and produces **statistical results and visual dashboards** based entirely on a **configuration file**, without using hardcoded values.
-
-The system follows the **Single Responsibility Principle (SRP)** by separating data loading, processing, visualization, and orchestration into distinct modules.
-
----
-
-## Objectives
-
-* Use **functional programming** (`map`, `filter`, `lambda`)
-* Enforce **configuration-driven behavior**
-* Apply **Single Responsibility Principle**
-* Compute GDP statistics (average, sum)
-* Generate multiple **data visualizations**
-* Maintain proper **GitHub version control**
-
----
-
-## Technologies Used
-
-* Python
-* Matplotlib
-* CSV Data Processing
-* Git & GitHub
-
----
-
-## Project Structure
-
+## 10. `readme.txt`
 ```
-sda-gdp-analysis/
-│
-├── data/
-│   └── gdp_data.csv
-│
-├── config/
-│   └── config.json
-│
-├── src/
-│   ├── data_loader.py
-│   ├── data_processor.py
-│   ├── visualizer.py
-│   ├── dashboard.py
-│   ├── main.py
-│
-├── README.md
-```
+============================================================
+  Generic Concurrent Real-Time Pipeline — Phase 3
+  SDA Spring 2026
+============================================================
 
----
+MAIN FILE
+---------
+  main.py   ← Run this file to start the pipeline
 
-## Configuration File
+HOW TO RUN
+----------
+  1. Place your CSV dataset in the data/ folder.
+  2. Edit config.json to point to your dataset and map your columns.
+  3. Install dependencies:
+       pip install matplotlib
+  4. Run:
+       python main.py
 
-All filtering and computation logic is controlled using `config/config.json`.
+FILE STRUCTURE
+--------------
+  main.py               ← Central orchestrator (start here)
+  config.json           ← Drives everything: schema, keys, parallelism
+  readme.txt            ← This file
 
-### Example:
+  core/
+    __init__.py
+    contracts.py        ← Abstract types: RawPacket, ProcessedPacket, interfaces
+    engine.py           ← Functional Core (pure fns) + Imperative Shell (workers)
+    telemetry.py        ← Observer Pattern: PipelineTelemetry subject
 
-```json
-{
-  "region": "South Asia",
-  "year": 2020,
-  "operation": "average",
-  "output": "dashboard"
-}
-```
+  plugins/
+    __init__.py
+    inputs.py           ← Generic CSV reader (schema-driven, fully generic)
+    outputs.py          ← Matplotlib dashboard (Observer + IOutputModule)
 
-✔ No region, year, or operation is hardcoded in source code.
+  data/
+    climate_data.csv    ← Place your dataset here
 
----
+CONFIG.JSON KEYS
+----------------
+  dataset_path                            → path to CSV (relative to main.py)
+  pipeline_dynamics.input_delay_seconds   → throttle input speed
+  pipeline_dynamics.core_parallelism      → number of parallel Core workers
+  pipeline_dynamics.stream_queue_max_size → bounded queue capacity
+  schema_mapping.columns                  → map CSV headers → internal fields
+    source_name       → exact CSV column header
+    internal_mapping  → one of: entity_name, time_period,
+                                metric_value, security_hash
+    data_type         → string | integer | float | bool
+  processing.stateless_tasks.secret_key        → PBKDF2 secret key
+  processing.stateless_tasks.iterations        → hash iterations (default 100000)
+  processing.stateful_tasks.running_average_window_size → sliding window size
+  visualizations.telemetry    → toggle queue health bars
+  visualizations.data_charts  → configure live chart titles and axes
 
-## Functional Programming Usage
+FOR UNSEEN DATASETS
+-------------------
+  Only change config.json:
+    1. Update "dataset_path" to point to your new CSV.
+    2. Update "schema_mapping.columns" to match new column headers.
+    3. Update "secret_key" if provided by the evaluator.
+  Zero code changes needed.
 
-The project uses:
+ARCHITECTURE
+------------
+  Producer-Consumer : Input → Raw Queue → Core Workers → Intermediate Queue
+                      → Aggregator → Processed Queue → Dashboard
+  Scatter-Gather    : N workers in parallel; Aggregator resequences via
+                      min-heap by serial number before averaging
+  Functional Core   : compute_signature(), verify_packet(),
+                      sliding_window_average() are pure functions
+  Imperative Shell  : CoreWorker and Aggregator handle all I/O and state
+  Observer Pattern  : PipelineTelemetry (Subject) notifies Dashboard (Observer)
+  Backpressure      : bounded Queue.put() blocks Input when Core is slow
+  Telemetry Colors  : Green (<40% full), Orange (40–75%), Red (>75%)
 
-* `map`
-* `filter`
-* `lambda` functions
-
-These are mainly applied in **data processing** and **visualization** modules.
-
----
-
-## Module Responsibilities
-
-### Data Loader
-
-* Loads GDP data from CSV files
-
-### Data Processor
-
-* Cleans data
-* Filters by region, year, and country
-* Computes statistical results
-
-### Visualizer
-
-* Generates:
-
-  * Bar chart (Region-wise GDP)
-  * Line chart (Year-specific GDP)
-  * Pie chart (GDP distribution)
-
-### Dashboard
-
-* Reads configuration
-* Coordinates all modules
-* Displays results and charts
-* Handles errors
-
-### Main
-
-* Entry point of the application
-* Starts the dashboard
-
----
-
-## Visualizations
-
-* Region-wise GDP (Bar Chart)
-* Year-specific GDP (Line Chart)
-* GDP Distribution (Pie Chart)
-
-All charts include proper titles and labels.
-
----
-
-## ⚠️ Error Handling
-
-* Missing CSV files
-* Invalid configuration values
-* Empty filtered datasets
-
-Errors are shown as clear messages in the dashboard.
-
----
-
-## How to Run
-
-1. Install dependency:
-
-```bash
-pip install matplotlib
-```
-
-2. Run the project:
-
-```bash
-python src/main.py
-```
-
-3. Modify `config.json` to analyze different regions or years.
-
-
-## Team Members
-
-* **Muhammad Nouman Malik**
-* **Abdullah Nawaz**
-
-## Key Features
-
-* Fully configuration-driven
-* Functional programming based
-* SRP-compliant architecture
-* Dashboard-style output
-* Incremental GitHub commits
-
+DEPENDENCIES
+------------
+  Python 3.9+
+  matplotlib   (pip install matplotlib)
+  Standard library only otherwise.
+============================================================
