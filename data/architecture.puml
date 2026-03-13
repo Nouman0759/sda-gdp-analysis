@@ -1,75 +1,172 @@
-@startuml Architecture
-' ============================================
-' Clean PlantUML for GDP Analysis Modular Architecture
-' ============================================
+@startuml ClassDiagram
 
-skinparam packageStyle rectangle
-skinparam linetype ortho
-skinparam shadowing false
-skinparam ArrowFontSize 10
-skinparam defaultFontSize 11
+skinparam backgroundColor #1e1e2e
+skinparam classBackgroundColor #2a2a3e
+skinparam classBorderColor #7070aa
+skinparam classArrowColor #aaaaff
+skinparam classFontColor white
+skinparam stereotypeCBackgroundColor #444466
 
-' -------------------------
-' Core Module
-' -------------------------
-package "Core Module" {
-    interface DataSink
-    interface PipelineService
+' ─────────────────────────────────────────────
+'  CONTRACTS
+' ─────────────────────────────────────────────
 
-    class TransformationEngine {
-        +config: dict
-        +execute(raw_data: List<Dict>)
+package "core.contracts" {
+
+    class RawPacket {
+        + serial: int
+        + entity_name: str
+        + time_period: int
+        + metric_value: float
+        + security_hash: str
+        + extra_fields: dict
     }
 
-    TransformationEngine ..|> PipelineService
+    class ProcessedPacket {
+        + serial: int
+        + entity_name: str
+        + time_period: int
+        + metric_value: float
+        + verified: bool
+        + computed_metric: float
+    }
+
+    interface IInputModule {
+        + run(raw_queue, stop_event): None
+    }
+
+    interface ICoreWorker {
+        + run(raw_queue, processed_queue, stop_event): None
+    }
+
+    interface IOutputModule {
+        + run(processed_queue, telemetry, stop_event): None
+    }
+
+    interface ITelemetryObserver {
+        + on_telemetry_update(snapshot: dict): None
+    }
 }
 
-' -------------------------
-' Input Module
-' -------------------------
-package "Input Module" {
-    class CsvReader {
-        +run()
-    }
-    class JsonReader {
-        +run()
-    }
+' ─────────────────────────────────────────────
+'  TELEMETRY
+' ─────────────────────────────────────────────
 
-    CsvReader --> PipelineService : send raw data
-    JsonReader --> PipelineService : send raw data
+package "core.telemetry" {
+
+    class PipelineTelemetry {
+        - _raw_queue: Queue
+        - _processed_queue: Queue
+        - _max_size: int
+        - _poll_interval: float
+        - _observers: List
+        - _running: bool
+        + snapshot: dict
+        + subscribe(observer): None
+        + unsubscribe(observer): None
+        + start(): None
+        + stop(): None
+        - _notify(): None
+        - _poll_loop(): None
+        + increment_verified(): None
+        + increment_dropped(): None
+        + increment_averaged(): None
+    }
 }
 
-' -------------------------
-' Output Module
-' -------------------------
-package "Output Module" {
-    class ConsoleWriter {
-        +write(results: Any)
-    }
-    class DashboardWriter {
-        +write(results: Dict)
-        +start()
+' ─────────────────────────────────────────────
+'  ENGINE
+' ─────────────────────────────────────────────
+
+package "core.engine" {
+
+    class CoreWorker {
+        + worker_id: int
+        - secret_key: str
+        - iterations: int
+        + run(raw_queue, intermediate_queue, telemetry_counters, stop_event): None
     }
 
-    TransformationEngine --> DataSink : write results
-    ConsoleWriter ..|> DataSink
-    DashboardWriter ..|> DataSink
+    class Aggregator {
+        - window_size: int
+        - num_workers: int
+        + run(intermediate_queue, processed_queue, telemetry_counters, stop_event, ...): None
+    }
+
+    class "<<functional core>>" as FC {
+        + compute_signature(metric_value, secret_key, iterations): str
+        + verify_packet(packet, secret_key, iterations): bool
+        + sliding_window_average(window, new_value, window_size): tuple
+    }
 }
 
-' -------------------------
-' Main Module
-' -------------------------
-package "Main Module" {
-    class main
+' ─────────────────────────────────────────────
+'  PLUGINS
+' ─────────────────────────────────────────────
+
+package "plugins.inputs" {
+
+    class CSVInputModule {
+        - _dataset_path: str
+        - _delay: float
+        - _schema: list
+        - _telemetry_counters: dict
+        + run(raw_queue, stop_event): None
+    }
 }
 
-' -------------------------
-' Dependencies from Main
-' -------------------------
-main --> TransformationEngine : inject sink
-main --> CsvReader : inject engine
-main --> JsonReader : inject engine
-main --> ConsoleWriter : select sink
-main --> DashboardWriter : select sink
+package "plugins.outputs" {
+
+    class Dashboard {
+        - _x_values: deque
+        - _y_metric: deque
+        - _y_average: deque
+        - _snapshot: dict
+        - _pipeline_done: bool
+        + on_telemetry_update(snapshot: dict): None
+        + run(processed_queue, telemetry, stop_event): None
+        - _consume(processed_queue, stop_event): None
+    }
+}
+
+' ─────────────────────────────────────────────
+'  MAIN
+' ─────────────────────────────────────────────
+
+package "main" {
+
+    class Orchestrator {
+        + main(): None
+        - _run_input(config, raw_queue, stop_event, telemetry_counters): None
+        - _run_core_worker(worker_id, config, raw_queue, intermediate_queue, telemetry_counters, stop_event): None
+        - _run_aggregator(config, num_workers, intermediate_queue, processed_queue, telemetry_counters, stop_event): None
+    }
+}
+
+' ─────────────────────────────────────────────
+'  RELATIONSHIPS
+' ─────────────────────────────────────────────
+
+IInputModule <|.. CSVInputModule
+IOutputModule <|.. Dashboard
+ITelemetryObserver <|.. Dashboard
+ICoreWorker <|.. CoreWorker
+
+PipelineTelemetry "1" o-- "many" ITelemetryObserver : notifies
+
+CSVInputModule ..> RawPacket : creates
+CoreWorker ..> RawPacket : consumes
+CoreWorker ..> ProcessedPacket : creates
+CoreWorker ..> FC : calls
+Aggregator ..> ProcessedPacket : enriches
+Aggregator ..> FC : calls
+
+Orchestrator --> CSVInputModule : spawns
+Orchestrator --> CoreWorker : spawns x4
+Orchestrator --> Aggregator : spawns
+Orchestrator --> PipelineTelemetry : starts
+Orchestrator --> Dashboard : runs
+
+Dashboard --> PipelineTelemetry : subscribes to
 
 @enduml
