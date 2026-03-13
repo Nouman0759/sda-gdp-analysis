@@ -1,16 +1,65 @@
 {
-  "input": {
-    "type": "csv",
-    "file_path": "data/gdp_with_continent_filled.csv"
+  "dataset_path": "data/nice.csv",
+  "pipeline_dynamics": {
+    "input_delay_seconds": 0.001,
+    "core_parallelism": 4,
+    "stream_queue_max_size": 50
   },
-  "output": {
-    "type": "dashboard"
+  "schema_mapping": {
+    "columns": [
+      {
+        "source_name": "Sensor_ID",
+        "internal_mapping": "entity_name",
+        "data_type": "string"
+      },
+      {
+        "source_name": "Timestamp",
+        "internal_mapping": "time_period",
+        "data_type": "integer"
+      },
+      {
+        "source_name": "Raw_Value",
+        "internal_mapping": "metric_value",
+        "data_type": "float"
+      },
+      {
+        "source_name": "Auth_Signature",
+        "internal_mapping": "security_hash",
+        "data_type": "string"
+      }
+    ]
   },
-  "analysis": {
-    "continent": "Asia",
-    "year": 2000,
-    "start_year": 1980,
-    "end_year": 2022,
-    "decline_years": 2
+  "processing": {
+    "stateless_tasks": {
+      "operation": "verify_signature",
+      "algorithm": "pbkdf2_hmac",
+      "iterations": 100000,
+      "secret_key": "sda_spring_2026_secure_key"
+    },
+    "stateful_tasks": {
+      "operation": "running_average",
+      "running_average_window_size": 10
+    }
+  },
+  "visualizations": {
+    "telemetry": {
+      "show_raw_stream": true,
+      "show_intermediate_stream": true,
+      "show_processed_stream": true
+    },
+    "data_charts": [
+      {
+        "type": "real_time_line_graph_values",
+        "title": "Live Sensor Values (Authentic Only)",
+        "x_axis": "time_period",
+        "y_axis": "metric_value"
+      },
+      {
+        "type": "real_time_line_graph_average",
+        "title": "Live Sensor Running Average",
+        "x_axis": "time_period",
+        "y_axis": "computed_metric"
+      }
+    ]
   }
 }
