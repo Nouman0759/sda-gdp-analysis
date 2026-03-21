@@ -1,111 +1,59 @@
-@startuml SequenceDiagram
+@startuml GenericConcurrentPipeline
 
-skinparam backgroundColor #1e1e2e
-skinparam sequenceArrowColor #aaaaff
-skinparam sequenceLifeLineBorderColor #7070aa
-skinparam sequenceParticipantBackgroundColor #2a2a3e
-skinparam sequenceParticipantBorderColor #7070aa
-skinparam sequenceFontColor white
-skinparam sequenceGroupBorderColor #aaaaff
-skinparam sequenceGroupFontColor white
-skinparam sequenceGroupBackgroundColor #2a2a3e
+skinparam backgroundColor white
+skinparam sequenceParticipantBackgroundColor white
+skinparam sequenceParticipantBorderColor #38bdf8
+skinparam sequenceArrowColor #7dd3fc
+skinparam sequenceFontColor #e2e8f0
+skinparam sequenceGroupBorderColor #7dd3fc
+skinparam sequenceGroupFontColor #e2e8f0
 
-participant "main.py\nOrchestrator" as MAIN
-participant "CSVInputModule\n(Process)" as INPUT
-participant "Raw Queue\n(bounded)" as RQ
-participant "CoreWorker x4\n(Processes)" as CW
-participant "Intermediate Queue\n(priority)" as IQ
-participant "Aggregator\n(Process)" as AGG
-participant "Processed Queue\n(bounded)" as PQ
-participant "PipelineTelemetry\n(Thread)" as TEL
-participant "Dashboard\n(Main Thread)" as DASH
+participant MAIN
+participant INPUT
+participant "Raw Queue\n(bounded, backpressure)" as RQ
+participant "Core Workers (xN)" as CW
+participant "Processed Stream Queue" as IQ
+participant AGG
+participant "Processed Queue\n(bounded, backpressure)" as PQ
+participant TELEMETRY
+participant DASH
 
 == Initialization ==
+MAIN -> INPUT : start()
+MAIN -> CW : start (parallelism from config)
+MAIN -> AGG : start()
+MAIN -> TELEMETRY : start()
+MAIN -> DASH : run()
 
-MAIN -> MAIN : load config.json
-MAIN -> MAIN : create Manager().dict()\ntelemetry_counters
-MAIN -> MAIN : create raw_queue, intermediate_queue,\nprocessed_queue, stop_event
-MAIN -> TEL : start() - daemon thread
-MAIN -> INPUT : Process.start()
-MAIN -> CW : Process.start() x4
-MAIN -> AGG : Process.start()
-MAIN -> DASH : run() on main thread
-DASH -> TEL : subscribe(self)
-
-== Data Ingestion (Input Producer) ==
-
-loop for each row in CSV
-    INPUT -> INPUT : read row
-    INPUT -> INPUT : _map_row() - schema mapping\ntype casting from config
-    INPUT -> INPUT : build RawPacket(serial=N)
-    INPUT -> RQ : put(RawPacket) - blocks on backpressure
-    INPUT -> INPUT : telemetry_counters\n[raw_queue_size] += 1
-    INPUT -> INPUT : sleep(input_delay_seconds)
+== Data Stream: Input → Core ==
+loop Streaming data
+    INPUT -> RQ : put(data_packet)
 end
 
-INPUT -> RQ : put(None) sentinel
-
-== Parallel Processing - Scatter (Core Workers) ==
-
-loop 4 workers in parallel
-    CW -> RQ : get(RawPacket)
-    CW -> CW : telemetry_counters\n[raw_queue_size] -= 1
-    CW -> CW : <<Functional Core>>\nverify_packet(packet, secret_key)\npbkdf2_hmac 100000 iterations
-    alt packet verified
-        CW -> IQ : put((serial, ProcessedPacket))
-        CW -> CW : telemetry_counters[verified] += 1\ntelemetry_counters[processed_queue_size] += 1
-    else packet dropped
-        CW -> CW : telemetry_counters[dropped] += 1
-    end
+par Core Workers (xN)
+    CW -> RQ : get(packet)
+    CW -> CW : verify_signature()
+    CW -> IQ : put(processed_packet)
 end
 
-CW -> IQ : put(None) sentinel x4
-
-== Resequencing and Aggregation - Gather (Aggregator) ==
-
-loop until all sentinels received
-    AGG -> IQ : get((serial, ProcessedPacket))
-    AGG -> AGG : telemetry_counters\n[processed_queue_size] -= 1
-    AGG -> AGG : heapq.heappush(heap, (serial, packet))\nmin-heap resequencing
-    loop while heap[0].serial == next_serial
-        AGG -> AGG : heapq.heappop(heap)
-        AGG -> AGG : <<Functional Core>>\nsliding_window_average(window,\nnew_value, window_size)
-        AGG -> PQ : put(ProcessedPacket\nwith computed_metric)
-        AGG -> AGG : telemetry_counters[averaged] += 1
-        AGG -> AGG : next_serial += 1
-    end
+== Aggregation (Resequencing + Stateful Processing) ==
+loop Process packets
+    AGG -> IQ : get(packet)
+    AGG -> AGG : resequence + compute_running_average()
+    AGG -> PQ : put(result)
 end
 
-AGG -> PQ : put(None) sentinel
-
-== Telemetry Observer Loop ==
-
-loop every 0.3 seconds
-    TEL -> TEL : poll telemetry_counters
-    TEL -> TEL : build snapshot dict\n(queue sizes, verified,\ndropped, averaged)
-    TEL -> DASH : on_telemetry_update(snapshot)
-    DASH -> DASH : update _snapshot\nwith lock
+== Output (Visualization) ==
+loop Real-time visualization
+    DASH -> PQ : consume(result)
+    DASH -> DASH : render_visualization(result)
 end
 
-== Dashboard Rendering Loop ==
-
-loop every 0.5 seconds until window closed
-    DASH -> DASH : read _snapshot
-    DASH -> DASH : draw Raw Queue bar\n(green/orange/red)
-    DASH -> DASH : draw Processed Queue bar\n(green/orange/red)
-    DASH -> DASH : draw Live Sensor Values\nline chart
-    DASH -> DASH : draw Running Average\nline chart
-    DASH -> DASH : fig.canvas.draw()\nplt.pause(0.5)
+== Telemetry (Observer Pattern) ==
+loop Periodic monitoring
+    TELEMETRY -> RQ : poll queue size
+    TELEMETRY -> PQ : poll queue size
+    TELEMETRY -> DASH : notify()
 end
-
-== Shutdown ==
-
-DASH -> MAIN : window closed by user
-MAIN -> MAIN : stop_event.set()
-MAIN -> TEL : stop()
-MAIN -> INPUT : join/terminate
-MAIN -> CW : join/terminate
-MAIN -> AGG : join/terminate
-MAIN -> MAIN : manager.shutdown()
 
 @enduml
