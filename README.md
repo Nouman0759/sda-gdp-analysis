@@ -31,10 +31,10 @@ The system is built to process **CSV-based datasets** and produce structured, va
 ```
 project-root/
 │
-├── src/                  # Core source code & logic modules
+├── core/                  # Core source code & logic modules
 ├── data/                 # Sample and test CSV datasets
-├── output/               # Program-generated results
-├── tests/                # Unit and integration test cases
+├── out/               # Program-generated results
+├── plugins/                # Unit and integration
 ├── main.py               # Entry point
 ├── requirements.txt      # Python dependencies
 └── README.md             # You are here
@@ -67,15 +67,6 @@ python main.py
 
 ---
 
-## 📊 Evaluation Notes (TA — Please Read)
-
-- The system is designed to **accept any valid CSV file** without requiring code modifications.
-- Simply provide the CSV file path at runtime or drop it into the `data/` folder.
-- All output is written to the `output/` directory for easy review.
-- Do **not** manually alter file paths during evaluation unless explicitly needed.
-
----
-
 ## 🧪 Testing
 
 - Core functionalities tested against multiple sample datasets.
@@ -94,7 +85,6 @@ python main.py
 |---|---|
 | **Name** | Muhammad Nouman Malik |
 | **Roll No.** | 24L-0759 |
-|---|---|
 | **Name** | Abdullah Nawaz |
 | **Roll No.** | 24L-0626 |
 | **Course** | Software Design & Architecture |
